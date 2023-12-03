@@ -34,13 +34,14 @@ def loopPartition(numIterations):
 
     def entangle1(particle1, particle2):
         # prob_success = 0.02
-        # prob_success = 0.00001
+        # prob_success = 0.0000095
+        prob_success = 0.00001
         
         # from Realization...
         # generation rate = 2 * alpha * p_det
         # for A-B, alpha = 0.05-0.07, p_det = 3.6*10^-4, 4.4*10^-4
         # thus, prob_success ~= 0.000048
-        prob_success = 0.000048
+        # prob_success = 0.000048
 
         # output statistics
         fails_ent1_decohere = 0
@@ -105,13 +106,14 @@ def loopPartition(numIterations):
     def entangle2(particle1, particle2):
         # print(f"entangle2 started at time {sched.getTime()}!")
         # prob_success = 0.02
-        # prob_success = 0.00001
+        # prob_success = 0.0000095
+        prob_success = 0.00001
 
         # from Realization...
         # generation rate = 2 * alpha * p_det
         # for B-C, alpha = 0.05-0.10, p_det = 4.2*10^-4, 3.0*10^-4
         # thus, prob_success ~= 0.000048
-        prob_success = 0.000054
+        # prob_success = 0.000054
 
         # output statistics
         fails_ent2_decohere = 0
@@ -310,8 +312,8 @@ if __name__ == '__main__':
     fidelity = 0.0
 
     # numIterations = 6400000
-    # numIterations = 6000000
-    numIterations = 6000
+    numIterations = 6000000
+    # numIterations = 6000
     progDiv = 1
     numThreads = 12
 

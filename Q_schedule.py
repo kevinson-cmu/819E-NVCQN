@@ -1,4 +1,4 @@
-# 819E
+# 819E scheduler class
 
 class schedule:
 
@@ -26,7 +26,7 @@ class schedule:
         self.globalTime = event[0]
         func = event[1]
         self.events.remove(event)
-        print(f"Time: {self.globalTime}; Running function")
+        # print(f"Time: {self.globalTime}; Running function {func}")
         func()
 
     def evalAll(self):
@@ -35,15 +35,49 @@ class schedule:
 
     def passTime(self, time):
         self.events.sort(key=self.byTime)
+        if len(self.events) == 0:
+            return
         nextTime = self.events[0][0]
-        eventHappens = (self.globalTime + time > nextTime)
+        eventHappens = (self.globalTime + time >= nextTime)
         
         while eventHappens:
-            eval()
+            self.eval()
             self.events.sort(key=self.byTime)
+            if (len(self.events) == 0):
+                break
             nextTime = self.events[0][0]
             eventHappens = (self.globalTime + time > nextTime)
+            
+        self.globalTime += time
+        # print(f"passed time {time}, globalTime: {self.globalTime}")
 
-        print(f"passed to time {time}")
+
+    def goToTime(self, time):
+        self.events.sort(key=self.byTime)
+        if len(self.events) == 0:
+            return
+        nextTime = self.events[0][0]
+        eventHappens = (time >= nextTime)
+        
+        while eventHappens:
+            self.eval()
+            self.events.sort(key=self.byTime)
+            if len(self.events) == 0:
+                return
+            nextTime = self.events[0][0]
+            eventHappens = (time >= nextTime)
+
+        # print(f"completed up to time {time}")
+        self.globalTime = time
             
-            
+    def wipeAll(self):
+        del self.events[:]
+        self.events = []
+        # print(f"wiped all events")
+
+    def resetTime(self):
+        self.globalTime = 0.0
+
+    def reset(self):
+        self.wipeAll()
+        self.resetTime()
