@@ -18,6 +18,7 @@ class particle:
     polarization = None
 
     coherent = False
+    decohereEvent = None
     measured = None
 
     def __init__(self, sch):
@@ -28,6 +29,9 @@ class particle:
     def decohere(self):
         self.coherent = False
         # print(f"particle {self} decohered; id:{self.id}, time:{self.sched.getTime()}")
+
+    def setDecohereTime(self, time):
+        self.decohereEvent[0] = time
 
     def entangle(self, particle):
         self.entangledWith.append(particle)

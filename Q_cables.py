@@ -8,7 +8,7 @@ class opticCable:
     # in the 1.5um WL range, loss is 0.2 dB/km
     degradationFactor = 0.2 
     
-    # TODO: consider removing this?
+    # for use if distance doesn't change
     distance = 1.0
 
     SoL = 300000.0 # speed of light: km/s

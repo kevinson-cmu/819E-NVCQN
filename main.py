@@ -189,6 +189,9 @@ def loopPartition(numIterations):
         # set up iteration metrics
         time_iterStart = sched.getTime()
 
+        # reset memory state
+        sched.passTime(node1.time_init)
+
         # from Realization of a multinode quantum network (Pompili),
         # attempt entanglement between two nodes
         node1.generate()

@@ -15,7 +15,9 @@ class schedule:
         return self.globalTime
     
     def add(self, time, func):
-        self.events.append([time, func])
+        event = [time, func]
+        self.events.append(event)
+        return event
 
     def byTime(self, e):
         return e[0]

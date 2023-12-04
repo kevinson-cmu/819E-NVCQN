@@ -23,7 +23,7 @@ class node_NV:
     # average times range from 4s to 25s, worse due to distance from core -> spin coupling to environment
     # time_coh_mem = 25000.0000
     # from Realization of a multinode quantum network, 11.6ms
-    time_coh_mem = 11.60
+    time_coh_mem = 11.6
     
     time_generate = 1.0
 
@@ -38,6 +38,7 @@ class node_NV:
     time_entangle_max = 16.0
     
     # from Realization of a multinode quantum network
+    time_init = 0.600 # 600us
     time_attempt_entangle1 = 0.0038 # 3.8us for A-B
     time_attempt_entangle2 = 0.005 # 5us for B-C
     time_local_entangleMeasure = 0.400 # 400us
@@ -83,10 +84,25 @@ class node_NV:
         
         # add "decohere particle" to scheduler
         globalTime = self.schedule.getTime()
-        self.schedule.add(globalTime + self.time_coh_comm, 
+        event = self.schedule.add(globalTime + self.time_coh_comm, 
                           partial(self.comm.decohere))
+        self.comm.decohereEvent = event
         # print(f"Queued decohere_comm - id:{self.comm.id}. time:{globalTime + self.time_coh_comm}")
         return self.comm.id
+
+    def generate_vis(self, modif):
+        if self.comm is not None:
+            del self.comm
+        self.comm = Q_particles.particle(self.schedule)
+        
+        # add "decohere particle" to scheduler
+        globalTime = self.schedule.getTime()
+        event = self.schedule.add(globalTime + (self.time_coh_comm * modif), 
+                          partial(self.comm.decohere))
+        self.comm.decohereEvent = event
+        # print(f"Queued decohere_comm - id:{self.comm.id}. time:{globalTime + self.time_coh_comm}")
+        return self.comm.id
+    
     
     def get_comm(self):
         return self.comm
@@ -152,12 +168,52 @@ class node_NV:
             # print("complete_swapMem: comm qubit missing, failed")
             return
         
-        globalTime = self.schedule.getTime()
-        self.schedule.add(globalTime + self.time_coh_mem, 
-                          partial(self.decohere_mem, self.mem[index], index))
-        # print(f"Completed swap - id:{self.mem[index].id} to ind{index}")
-        # print(f"Queued decohere_mem - id:{self.mem[index].id}, ind{index}")
+        decohereAtTime = self.schedule.getTime() + self.time_coh_mem_10qubit_ramsey(index)
+        self.mem[index].setDecohereTime(decohereAtTime)
+        # self.schedule.add(decohereAtTime, partial(self.mem[index].decohere))
         return
+    
+    def time_coh_mem_10qubit_ramsey(self, index):
+        if index == 0:
+            return 23.2
+        if index == 1:
+            return 12.0
+        if index == 2:
+            return 9.2
+        if index == 3:
+            return 11.9
+        if index == 4:
+            return 5.7
+        if index == 5:
+            return 15.6
+        if index == 6:
+            return 3.7
+        if index == 7:
+            return 4.1
+        if index == 8:
+            return 7.6
+        return self.time_coh_mem
+        
+    def time_coh_mem_10qubit_spin(self, index):
+        if index == 0:
+            return 2300.0
+        if index == 1:
+            return 770.0
+        if index == 2:
+            return 530.0
+        if index == 3:
+            return 680.0
+        if index == 4:
+            return 530.0
+        if index == 5:
+            return 620.0
+        if index == 6:
+            return 590.0
+        if index == 7:
+            return 520.0
+        if index == 8:
+            return 260.0
+        return self.time_coh_mem
 
     def decohere_mem(self, particle, index):
         if self.mem[index] == particle:

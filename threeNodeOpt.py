@@ -5,16 +5,19 @@ import Q_schedule
 import random
 import multiprocessing
 import time
+from functools import partial
+import matplotlib.pyplot as plt 
+
+# Modifiers:
+# Three-node network, two entanglements
+# QFC time added, coherence time * 0.78
+# Potential for variable distance
+memSize = 10
 
 # Main loop function, partitioned for parallelism
-
-# loop for iterations
-# if the probability is bad, 
-# average time should be 450 * (4ish us) -> 1.8ms?
-
-def loopPartition(numIterations):
+def loopPartition(numIterations, x):
     # local versions of global statistics
-    successes = 0
+    successes = [0] * memSize
     fails = 0
     fails_ent1_decohere = 0
     fails_ent1_maxTries = 0
@@ -27,20 +30,33 @@ def loopPartition(numIterations):
     averageTime = 0
     # globalTime = 0
     fidelity = 0
+    fails_fiber = 0
 
     # local versions of network constructs
     sched = Q_schedule.schedule()  
     particleList = []
 
+    def checkCoherence():
+        for particle in particleList:
+            if not particle.coherent:
+                return False
+        return True
+    
+    def freqUp(node1, node2):
+        time_freqUp = node1.time_TBQI_CRCheck + node1.time_TBQI_stabPG
+        sched.passTime(time_freqUp)
+        return
+
     def entangle1(particle1, particle2):
         # prob_success = 0.02
         # prob_success = 0.00001
+        prob_success = 0.001 # from Tiancheng's results
         
         # from Realization...
         # generation rate = 2 * alpha * p_det
         # for A-B, alpha = 0.05-0.07, p_det = 3.6*10^-4, 4.4*10^-4
         # thus, prob_success ~= 0.000048
-        prob_success = 0.000048
+        # prob_success = 0.000048
 
         # output statistics
         fails_ent1_decohere = 0
@@ -69,32 +85,24 @@ def loopPartition(numIterations):
                 and (numTries < maxTries)
             
             # end of while loop
-        # print(f"entangle1 ended at time {sched.getTime()}!")
+        
         if success:
             # TODO: update based on entanglement
             particle1.entangle(particle2)
-            particle2.entangle(particle1)
-            # print(f"Entanglement successful. Tries:{numTries}.")
-
-            
+            particle2.entangle(particle1)            
             return [True, fails_ent1_decohere, fails_ent1_maxTries] 
         else:
             reason = False
-            # print("Entangle1 Failed")
             if (not particle1.coherent and not particle2.coherent):
-                # print("Particle 1 & 2 decohered")
                 fails_ent1_decohere += 1
                 reason = True
             elif (not particle1.coherent):
-                # print("Particle 1 decohered")
                 fails_ent1_decohere += 1
                 reason = True
             elif (not particle2.coherent):
-                # print("Particle 2 decohered")
                 fails_ent1_decohere += 1
                 reason = True
             elif (numTries >= maxTries):
-                # print("Max tries exceeded")
                 fails_ent1_maxTries += 1
                 reason = True
             if (not reason):
@@ -103,15 +111,15 @@ def loopPartition(numIterations):
         return [False, fails_ent1_decohere, fails_ent1_maxTries]
 
     def entangle2(particle1, particle2):
-        # print(f"entangle2 started at time {sched.getTime()}!")
         # prob_success = 0.02
         # prob_success = 0.00001
+        prob_success = 0.001 # from Tiancheng's results
 
         # from Realization...
         # generation rate = 2 * alpha * p_det
         # for B-C, alpha = 0.05-0.10, p_det = 4.2*10^-4, 3.0*10^-4
         # thus, prob_success ~= 0.000048
-        prob_success = 0.000054
+        # prob_success = 0.000054
 
         # output statistics
         fails_ent2_decohere = 0
@@ -142,28 +150,21 @@ def loopPartition(numIterations):
             # end of while loop
 
         if success:
-            # TODO: update based on entanglement
             particle1.entangle(particle2)
             particle2.entangle(particle1)
-            # print(f"Entanglement successful. Tries:{numTries}.")
             return [True, fails_ent2_decohere, fails_ent2_maxTries]
         else:
             reason = False
-            # print("Entangle2 Failed")
             if ((not particle1.coherent) and (not particle2.coherent)):
-                # print("Particle 1 & 2 decohered")
                 fails_ent2_decohere += 1
                 reason = True
             elif (not particle1.coherent):
-                # print("Particle 1 decohered")
                 fails_ent2_decohere += 1
                 reason = True
             elif (not particle2.coherent):
-                # print("Particle 2 decohered")
                 fails_ent2_decohere += 1
                 reason = True
             elif (numTries >= maxTries):
-                # print("Max tries exceeded")
                 fails_ent2_maxTries += 1
                 reason = True
             if (not reason):
@@ -173,26 +174,40 @@ def loopPartition(numIterations):
 
     for i in range(numIterations):
 
-        # print options
-        # if (i % (numIterations / progDiv) == 0):
-        #     print(f"Progress: {i / (numIterations/progDiv)}/{progDiv}")
-        # print(".", end='', flush=True)
-
         # reset network objects
         sched.wipeAll()
+        particleList = []
         # sched.resetTime()
-        node1 = Q_nodes.node_NV(mS=1, sch=sched)
-        node2 = Q_nodes.node_NV(mS=1, sch=sched)
-        node3 = Q_nodes.node_NV(mS=1, sch=sched)
-        oc1 = Q_cables.opticCable()
+        node1 = Q_nodes.node_NV(mS=10, sch=sched)
+        node2 = Q_nodes.node_NV(mS=10, sch=sched)
+        node3 = Q_nodes.node_NV(mS=10, sch=sched)
+        # oc1 = Q_cables.opticCable(d=x)
+        oc1 = Q_cables.opticCable(dF=0.16,d=x)
         
         # set up iteration metrics
         time_iterStart = sched.getTime()
 
         # from Realization of a multinode quantum network (Pompili),
-        # attempt entanglement between two nodes
-        node1.generate()
-        node2.generate()
+        # reset memory state
+        sched.passTime(node1.time_init)
+        
+        # time to increase frequency
+        freqUp(node1, node2)
+        
+        # coherence time modified by visiblity difference
+        node1.generate_vis(0.79)
+        node2.generate_vis(0.79)
+        
+        # check if passes fiber
+        passFiber = oc1.passes_deg()
+        sched.passTime(oc1.time_ms_self())
+        if not passFiber:
+            fails_fiber += 1
+            fails += 1
+            averageTime += (sched.getTime() - time_iterStart)
+            continue
+
+        # attempt entanglement
         entangle1Results = entangle1(node1.comm, node2.comm)
         entangleSuccess = entangle1Results[0]
         fails_ent1_decohere += entangle1Results[1]
@@ -208,6 +223,7 @@ def loopPartition(numIterations):
 
         # swap memory and generate C
         node3.generate()
+        node1.swapMem2(0, False)
         node2.swapMem2(0, True)
         if (not node1.comm.coherent) or (not node2.comm.coherent) or (not node3.comm.coherent):
             print("Decohered during swapMem")
@@ -225,7 +241,7 @@ def loopPartition(numIterations):
         fails_ent2_decohere += entangle2Results[1]
         fails_ent2_maxTries += entangle2Results[2]
         
-        if (not entangleSuccess):
+        if (not entangleSuccess or (random.random() > 0.5)):
             fails += 1
             continue
 
@@ -262,10 +278,18 @@ def loopPartition(numIterations):
         fide_ghz = ent1[0] * ent2[0] * node2.fide_AC_ANYBSM
         ghz1 = [fide_ghz, node2.comm, node2.mem[0]]
 
-        successes += 1
+        # one successful entanglement. Time to try again?
+        
+        node3.swapMem2(0, False)
+        
+        sched.passTime(1) # 1ms BSM
+        sched.passTime(0.1) # 100us feedforward
+        node2.comm = None
+        node2.mem[0] = None
+
+        successes[1] += 1
         averageTime += (sched.getTime() - time_iterStart)
         fidelity += ghz1[0]
-        
         
         # end of iteration loop
 
@@ -284,6 +308,7 @@ def loopPartition(numIterations):
     output.append(averageTime)
     output.append(sched.getTime())
     output.append(fidelity)
+    output.append(fails_fiber)
     return output
     # end of function
 
@@ -292,78 +317,115 @@ def loopPartition(numIterations):
 if __name__ == '__main__':
     
     # catch wall clock time
-    startTime = time.time()
+    startTime_main = time.time()
 
-    # metrics (be sure to update in loop as well)
-    successes = 0
-    fails = 0
-    fails_ent1_decohere = 0
-    fails_ent1_maxTries = 0
-    fails_swap_decohere = 0
-    fails_ent2_decohere = 0
-    fails_ent2_maxTries = 0
-    fails_fwd1_decohere = 0
-    fails_localEnt_decohere = 0
-    fails_fwd2_decohere = 0
-    averageTime = 0
-    globalTime = 0
-    fidelity = 0.0
-
-    # numIterations = 6400000
     # numIterations = 6000000
-    numIterations = 6000
+    # numIterations = 1200000
+    # numIterations = 6000
+    # numIterations = 36000
+    numIterations = 72000
     progDiv = 1
     numThreads = 12
 
-    # init and run multiprocessing pool 
+    # init multiprocessing pool 
     pool = multiprocessing.Pool() 
     pool = multiprocessing.Pool(processes=numThreads) 
-    inputs = []
-    for i in range(numThreads):
-        inputs.append(int(numIterations/numThreads))
-    print(inputs)
-    outputs = pool.map(loopPartition, inputs)
+        
 
-    # sum values found in outputs
-    for i in range(numThreads):
-        print(outputs[i])
-        successes += outputs[i][0]
-        fails += outputs[i][1]
-        fails_ent1_decohere += outputs[i][2]
-        fails_ent1_maxTries += outputs[i][3]
-        fails_swap_decohere += outputs[i][4]
-        fails_ent2_decohere += outputs[i][5]
-        fails_ent2_maxTries += outputs[i][6]
-        fails_fwd1_decohere += outputs[i][7]
-        fails_localEnt_decohere += outputs[i][8]
-        fails_fwd2_decohere += outputs[i][9]
-        averageTime += outputs[i][10]
-        globalTime += outputs[i][11]
-        fidelity += outputs[i][12]
+    # graph variable values
+    # x = [0.02,0.3,1,10,25,50,75,100,125,150,175,200,225,250,275,300]
+    x = [0.02,0.3,1,10]
+    for i in range(int(300/12.5)):
+        x.append(12.5 * (i + 1))
+    y = []
+    print(f"x={x}")
 
-    # determine final statistics
-    averageTime = averageTime / numIterations
-    print(f"Successes: {successes}")
-    print(f"Fails: {fails}")
-    print(f"Fails (decohered in ent1): {fails_ent1_decohere}")
-    print(f"Fails (maxTries in ent1): {fails_ent1_maxTries}")
-    print(f"Fails (decohered in memory swap): {fails_swap_decohere}")
-    print(f"Fails (decohered in ent2): {fails_ent2_decohere}")
-    print(f"Fails (maxTries in ent2): {fails_ent2_maxTries}")
-    print(f"Fails (decohered in fwd1): {fails_fwd1_decohere}")
-    print(f"Fails (decohered in local ent): {fails_localEnt_decohere}")
-    print(f"Fails (decohered in fwd2): {fails_fwd2_decohere}")
-    print(f"Average Time (ms): {averageTime}")
-    print(f"Summed Global Time (ms): {globalTime}")
-    if (successes == 0):
-        print(f"Fidelity: N/A")
-    else:    
-        print(f"Fidelity: {fidelity / float(successes)}")
-    
-    print(f"Success Rate: {successes / float(numIterations)}")
-    if (successes == 0):
-        print(f"seconds per Successes: N/A")
-    else:    
-        print(f"seconds per Successes: {(globalTime / 1000.0) / successes}")
-    
-    print(f"Wallclock Time (s): {time.time() - startTime}")
+    # loop over indep variable
+    for i in range(len(x)):
+        
+        # log loop iteration start time
+        startTime = time.time()
+
+        # metrics (be sure to update in loop as well)
+        successes = [0] * memSize
+        fails = 0
+        fails_ent1_decohere = 0
+        fails_ent1_maxTries = 0
+        fails_swap_decohere = 0
+        fails_ent2_decohere = 0
+        fails_ent2_maxTries = 0
+        fails_fwd1_decohere = 0
+        fails_localEnt_decohere = 0
+        fails_fwd2_decohere = 0
+        averageTime = 0
+        globalTime = 0
+        fidelity = 0.0
+        fails_fiber = 0
+
+        # init pool vars and run
+        inputs = []
+        for j in range(numThreads):
+            inputs.append(x[i])
+        print(f"launching pool with x={x[i]}")
+        outputs = pool.map(partial(loopPartition, int(numIterations/numThreads)), inputs)
+
+        # sum values found in outputs
+        for j in range(numThreads):
+            print(outputs[j])
+            for k in range(memSize):
+                successes[k] += outputs[j][0][k]
+            fails += outputs[j][1]
+            fails_ent1_decohere += outputs[j][2]
+            fails_ent1_maxTries += outputs[j][3]
+            fails_swap_decohere += outputs[j][4]
+            fails_ent2_decohere += outputs[j][5]
+            fails_ent2_maxTries += outputs[j][6]
+            fails_fwd1_decohere += outputs[j][7]
+            fails_localEnt_decohere += outputs[j][8]
+            fails_fwd2_decohere += outputs[j][9]
+            averageTime += outputs[j][10]
+            globalTime += outputs[j][11]
+            fidelity += outputs[j][12]
+            fails_fiber += outputs[j][13]
+
+        # determine final statistics
+        averageTime = averageTime / numIterations
+        print(f"Successes: {successes}")
+        print(f"Fails: {fails}")
+        print(f"Fails (decohered in ent1): {fails_ent1_decohere}")
+        print(f"Fails (maxTries in ent1): {fails_ent1_maxTries}")
+        print(f"Fails (decohered in memory swap): {fails_swap_decohere}")
+        print(f"Fails (decohered in ent2): {fails_ent2_decohere}")
+        print(f"Fails (maxTries in ent2): {fails_ent2_maxTries}")
+        print(f"Fails (decohered in fwd1): {fails_fwd1_decohere}")
+        print(f"Fails (decohered in local ent): {fails_localEnt_decohere}")
+        print(f"Fails (decohered in fwd2): {fails_fwd2_decohere}")
+        print(f"Average Time (ms): {averageTime}")
+        print(f"Summed Global Time (ms): {globalTime}")
+        if (sum(successes) == 0):
+            print(f"Fidelity: N/A")
+        else:    
+            print(f"Fidelity: {fidelity / float(sum(successes))}")
+        print(f"Fails (fiber): {fails_fiber}")
+        
+        print(f"Success Rate: {sum(successes) / float(numIterations)}")
+        if (sum(successes) == 0):
+            print(f"seconds per Successes: N/A")
+        else:    
+            print(f"seconds per Successes: {(globalTime / 1000.0) / sum(successes)}")
+        
+        print(f"Wallclock Time (s): {time.time() - startTime}")
+
+        # PLOT: save communication rate (Hz)
+        y.append(sum(successes) / (globalTime / 1000.0))
+
+    # Final, overall statistics
+    print(f"Overall Wallclock Time (s): {time.time() - startTime_main}")
+
+    # PLOT: generate graph  
+    plt.plot(x, y)
+    # plt.plot(x, y, label="Plot1")
+    plt.xlabel('x - Distance (km)') 
+    plt.ylabel('y - Comm Rate (Hz)')  
+    plt.title('Comm Rate By Distance') 
+    plt.show()
